@@ -4,6 +4,7 @@ const envName = process.env.NODE_ENV === "production" ? "production" : "developm
 dotenv.config({ path: `.env.${envName}` });
 
 export const env = {
+  isProduction: process.env.NODE_ENV === "production",
   port: Number(process.env.PORT || 4000),
   mongodbUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/music_share",
   sessionSecret: process.env.SESSION_SECRET || "dev_secret_change_me",

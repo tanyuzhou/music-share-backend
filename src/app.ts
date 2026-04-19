@@ -7,6 +7,7 @@ import { env } from "./config/env.js";
 import { fail } from "./middlewares/response.js";
 
 const app = express();
+app.set("trust proxy", 1); // for render
 
 app.use(
   cors({
@@ -25,8 +26,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
+      secure: env.isProduction,
+      sameSite: env.isProduction ? "none" : "lax",
       maxAge: 1000 * 60 * 60 * 24 * 7
     },
     store: MongoStore.create({
