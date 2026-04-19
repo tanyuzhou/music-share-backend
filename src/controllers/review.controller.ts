@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { fail, ok } from "../middlewares/response.js";
 import { Review } from "../models/review.model.js";
+import { lookupTrack } from "../utils/itunes.js";
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -25,6 +26,9 @@ function toReviewDto(review) {
   return {
     id: review._id,
     appleTrackId: review.appleTrackId,
+    trackName: (review as any).trackName || "",
+    artistName: (review as any).artistName || "",
+    artworkUrl100: (review as any).artworkUrl100 || "",
     rating: review.rating,
     text: review.text,
     status: review.status,
@@ -37,6 +41,36 @@ function toReviewDto(review) {
       displayName: author.displayName || ""
     }
   };
+}
+
+async function attachReviewTrackMeta(reviews: any[]) {
+  const trackMap = new Map<number, any>();
+
+  await Promise.all(
+    reviews.map(async (review) => {
+      const trackId = Number(review.appleTrackId);
+      if (!trackId || trackMap.has(trackId)) {
+        return;
+      }
+
+      try {
+        const track = await lookupTrack(trackId);
+        trackMap.set(trackId, track || null);
+      } catch (_error) {
+        trackMap.set(trackId, null);
+      }
+    })
+  );
+
+  return reviews.map((review) => {
+    const track = trackMap.get(Number(review.appleTrackId));
+    return {
+      ...review,
+      trackName: track?.trackName || "",
+      artistName: track?.artistName || "",
+      artworkUrl100: track?.artworkUrl100 || ""
+    };
+  });
 }
 
 export async function listTrackReviews(req, res) {
@@ -65,9 +99,11 @@ export async function listTrackReviews(req, res) {
       Review.countDocuments(filter)
     ]);
 
+    const hydratedItems = await attachReviewTrackMeta(items);
+
     return res.status(200).json(
       ok({
-        list: items.map(toReviewDto),
+        list: hydratedItems.map(toReviewDto),
         page,
         limit,
         total
@@ -93,9 +129,11 @@ export async function listMyReviews(req, res) {
       Review.countDocuments(filter)
     ]);
 
+    const hydratedItems = await attachReviewTrackMeta(items);
+
     return res.status(200).json(
       ok({
-        list: items.map(toReviewDto),
+        list: hydratedItems.map(toReviewDto),
         page,
         limit,
         total
