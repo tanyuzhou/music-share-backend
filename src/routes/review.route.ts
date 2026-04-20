@@ -1,10 +1,12 @@
 import { Router } from "express";
 import { requireLogin } from "../middlewares/auth.js";
+import { requireRole } from "../middlewares/role.js";
 import {
   createTrackReview,
   deleteReview,
   listMyReviews,
   listTrackReviews,
+  moderateReview,
   updateReview
 } from "../controllers/review.controller.js";
 
@@ -15,5 +17,8 @@ reviewRouter.get("/tracks/:trackId/reviews", listTrackReviews);
 reviewRouter.post("/tracks/:trackId/reviews", requireLogin, createTrackReview);
 reviewRouter.put("/reviews/:reviewId", requireLogin, updateReview);
 reviewRouter.delete("/reviews/:reviewId", requireLogin, deleteReview);
+
+// Moderation
+reviewRouter.patch("/mod/reviews/:reviewId/status", requireLogin, requireRole(["MODERATOR", "SUPER_ADMIN"]), moderateReview);
 
 export default reviewRouter;

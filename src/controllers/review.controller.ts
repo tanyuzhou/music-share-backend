@@ -84,10 +84,22 @@ export async function listTrackReviews(req, res) {
     const limit = Math.min(parsePositiveInt(req.query.limit, 20), 50);
     const sort = parseSort(req.query.sort);
 
-    const filter = {
-      appleTrackId: trackId,
-      status: "PUBLISHED"
+    // If user is moderator/admin, show all (including hidden), else only published
+    const userRole = req.authUser?.role;
+    const isModOrAdmin = userRole === "MODERATOR" || userRole === "SUPER_ADMIN";
+
+    const filter: any = {
+      appleTrackId: trackId
     };
+
+    if (!isModOrAdmin) {
+      filter.status = "PUBLISHED";
+    } else {
+      // Moderators see everything EXCEPT what might be hard-deleted by admin if that was a status,
+      // but here we just show everything that is not DELETED_BY_ADMIN maybe?
+      // Actually, PLAN says HIDDEN_BY_MOD should be visible to mods.
+      filter.status = { $in: ["PUBLISHED", "HIDDEN_BY_MOD"] };
+    }
 
     const [items, total] = await Promise.all([
       Review.find(filter)
@@ -252,5 +264,36 @@ export async function deleteReview(req, res) {
     return res.status(200).json(ok({}, "deleted"));
   } catch (error) {
     return res.status(200).json(fail(1004, "failed to delete review"));
+  }
+}
+
+export async function moderateReview(req, res) {
+  try {
+    const { reviewId } = req.params;
+    const { status, reason } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(reviewId)) {
+      return res.status(200).json(fail(1001, "invalid reviewId"));
+    }
+
+    if (!["PUBLISHED", "HIDDEN_BY_MOD"].includes(status)) {
+      return res.status(200).json(fail(1001, "invalid moderation status"));
+    }
+
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      return res.status(404).json(fail(1404, "review not found"));
+    }
+
+    review.status = status;
+    review.moderationReason = String(reason || "").trim();
+
+    await review.save();
+
+    const updated = await Review.findById(reviewId).populate("authorId", "username displayName").lean();
+
+    return res.status(200).json(ok({ review: toReviewDto(updated) }, "review moderated"));
+  } catch (error) {
+    return res.status(200).json(fail(1004, "failed to moderate review"));
   }
 }
